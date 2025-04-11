@@ -21,8 +21,8 @@ jobs:
 
       - name: Set Git User Identity
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "Rubrion"
+          git config --global user.email "rubrion[bot]@users.noreply.github.com"
 
       - name: Checkout Develop Branch
         uses: actions/checkout@v4
@@ -60,6 +60,21 @@ jobs:
           fi
           echo "VERSION=\$VERSION" >> \$GITHUB_ENV
           echo "Release version set to \$VERSION"
+      
+      - name: Verify Version in Code
+        run: |
+          VERSION_IN_CODE=$(grep "CurrentVersion =" internal/commands/version.go | awk -F'"' '{print $2}')
+          echo "Version in code: $VERSION_IN_CODE"
+          echo "Expected version: $VERSION"
+          
+          if [ "$VERSION_IN_CODE" != "$VERSION" ]; then
+            echo "ERROR: Version mismatch detected!"
+            echo "The version in internal/commands/version.go ($VERSION_IN_CODE) does not match the release version ($VERSION)."
+            echo "Please update the CurrentVersion in internal/commands/version.go to $VERSION and run the workflow again."
+            exit 1
+          else
+            echo "Version check passed: Code version matches release version."
+          fi
 
       - name: Generate Changelog
         run: |
@@ -80,22 +95,31 @@ jobs:
 
       - name: Build Cross-Platform Binaries
         run: |
+          if [ -z "\${{ vars.PROJECT_NAME }}" ]; then
+            echo "ERROR: PROJECT_NAME GitHub variable is not set. Please set it in repository settings."
+            exit 1
+          fi
+          
+          PROJECT_NAME="\${{ vars.PROJECT_NAME }}"
+          echo "Using project name: \$PROJECT_NAME"
+          
           go mod tidy
           echo "Building CLI for version \$VERSION"
           mkdir -p dist
       
-          GOOS=linux GOARCH=amd64 go build -o dist/mc-rubrion-cli-linux -ldflags="-X 'mc-rubrion-cli/commands.CurrentVersion=\${VERSION}'" main.go || exit 1
-          GOOS=windows GOARCH=amd64 go build -o dist/mc-rubrion-cli.exe -ldflags="-X 'mc-rubrion-cli/commands.CurrentVersion=\${VERSION}'" main.go || exit 1
-          GOOS=darwin GOARCH=amd64 go build -o dist/mc-rubrion-cli-mac -ldflags="-X 'mc-rubrion-cli/commands.CurrentVersion=\${VERSION}'" main.go || exit 1
+          GOOS=linux GOARCH=amd64 go build -o dist/\$PROJECT_NAME-linux -ldflags="-X '\$PROJECT_NAME/commands.CurrentVersion=\${VERSION}'" main.go || exit 1
+          GOOS=windows GOARCH=amd64 go build -o dist/\$PROJECT_NAME.exe -ldflags="-X '\$PROJECT_NAME/commands.CurrentVersion=\${VERSION}'" main.go || exit 1
+          GOOS=darwin GOARCH=amd64 go build -o dist/\$PROJECT_NAME-mac -ldflags="-X '\$PROJECT_NAME/commands.CurrentVersion=\${VERSION}'" main.go || exit 1
       
           echo "Build completed. Contents of dist/:"
           ls -lh dist/
 
       - name: Create GitHub Release
         run: |
+          PROJECT_NAME="\${{ vars.PROJECT_NAME }}"
           gh release create "v\${VERSION}" \
             --title "Release v\${VERSION}" \
             --notes-file CHANGELOG.md \
-            dist/mc-rubrion-cli-linux dist/mc-rubrion-cli.exe dist/mc-rubrion-cli-mac
+            dist/\$PROJECT_NAME-linux dist/\$PROJECT_NAME.exe dist/\$PROJECT_NAME-mac
         env:
           GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
