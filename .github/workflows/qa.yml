@@ -35,10 +35,10 @@ jobs:
 
       - name: Check Formatting
         run: |
-          diff=\$(go fmt ./...)
-          if [ -n "\$diff" ]; then
+          diff=$(go fmt ./...)
+          if [ -n "$diff" ]; then
             echo "Code not formatted properly! Run 'go fmt ./...' locally."
-            echo "\$diff"
+            echo "$diff"
             exit 1
           else
             echo "All files properly formatted."
